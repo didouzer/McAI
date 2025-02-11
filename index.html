@@ -1,0 +1,1813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>McAI</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; background: #d9bf4e; }
+    #nicknameInput { position: absolute; display: none; font-size: 20px; padding: 5px; z-index: 10; border-radius: 10px; }
+    #nicknameOkButton { position: absolute; display: none; font-size: 20px; padding-bottom: 42px; z-index: 10; background-color: rgba(255, 165, 0, 0.9); border: 3px solid #000; border-radius: 10px; font: bold 24px "Comic Sans MS", sans-serif; color: #000; text-align: center; cursor: pointer; transition: transform 0.2s ease, background-color 0.2s ease; }
+    #nicknameOkButton:hover { transform: scale(1.1); background-color: rgba(0,128,0,0.9); }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas"></canvas>
+  <input type="text" id="nicknameInput" placeholder="Enter Nickname">
+  <button id="nicknameOkButton">OK</button>
+
+  <script>
+    // -------------------------------
+    // Global Variables and Initialization
+    // -------------------------------
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let disconnectButtonRegion = null; // Will hold disconnect button region and hover state
+    let leaderboardBackHovered = false;  // Hover state for the leaderboard back button
+    let continueButtonRegion = null;     // Region for the extra "Continue?" button
+    let continueHovered = false;         // Hover state for the "Continue?" button
+    let prevContinueHovered = false;
+
+    let showMenu = true;  // true when on the main menu; false when playing
+    let currentMenu = "main";
+
+    let menuTransition = {
+      active: false,
+      progress: 0,       // in ms
+      duration: 500,
+      from: "main",
+      to: "main"
+    };
+
+    // Hover states for various buttons and UI elements
+    let jouerHovered = false, lbHovered = false, settingsHovered = false;
+    let settingsToggleHovered = false, sfxToggleHovered = false;
+    let settingsVolMinusHovered = false, settingsVolPlusHovered = false;
+    let settingsNicknameHovered = false, settingsBackHovered = false;
+    let pauseResumeHovered = false, pauseRetryHovered = false, pauseSettingsHovered = false, pauseQuitHovered = false;
+    let pauseButtonHovered = false;
+
+    let musicOn = true, soundEffectsOn = true;
+    const hoverSound = new Audio("https://www.soundjay.com/buttons/sounds/button-19.mp3");
+    function playHoverSound() {
+      if (!soundEffectsOn) return;
+      hoverSound.cloneNode(true).play();
+    }
+    let prevJouerHovered = false, prevLbHovered = false, prevSettingsHovered = false;
+    let prevDisconnectHovered = false, prevSettingsToggleHovered = false;
+    let prevSfxToggleHovered = false, prevSettingsVolMinusHovered = false;
+    let prevSettingsVolPlusHovered = false, prevSettingsNicknameHovered = false;
+    let prevSettingsBackHovered = false, prevPauseResumeHovered = false;
+    let prevPauseRetryHovered = false, prevPauseSettingsHovered = false;
+    let prevPauseQuitHovered = false, prevPauseButtonHovered = false;
+
+    // Wallet and user settings
+    let walletConnected = false, walletAddress = "";
+    let Nickname = localStorage.getItem("Nickname") || "Anonymous";
+    let nicknameInputVisible = false;
+
+    let leaderboardUpdated = false;
+
+    // Modal transition variables
+    let leaderboardPopupProgress = 0, settingsPopupProgress = 0;
+    let leaderboardClosing = false, settingsClosing = false;
+    const modalTransitionDuration = 300; // ms
+
+    let pauseSettingsActive = false;
+
+    // -------------------------------
+    // Assets
+    // -------------------------------
+    const burgerImage = new Image();
+    burgerImage.src = "https://img.icons8.com/color/96/hamburger.png";
+    burgerImage.onerror = () => { console.error("Error loading burger image."); };
+
+    const friesImage = new Image();
+    friesImage.src = "https://img.icons8.com/color/96/french-fries.png";
+    friesImage.onerror = () => { console.error("Error loading fries image."); };
+
+    const playerImage = new Image();
+    playerImage.src = "https://image.noelshack.com/fichiers/2025/06/5/1738940288-bh.png";
+    playerImage.onerror = () => { console.error("Error loading player image."); };
+
+    const menuRightImage = new Image();
+    menuRightImage.crossOrigin = "anonymous";
+    menuRightImage.src = "https://res.cloudinary.com/dnqwevxfy/image/upload/v1739034980/lwdpxdf43zplawdhhuzg.png";
+    menuRightImage.onerror = () => { console.error("Error loading menu image."); };
+
+    const titleImage = new Image();
+    titleImage.src = "https://res.cloudinary.com/dnqwevxfy/image/upload/v1739092885/u9uowwthbs2anv36q72z.png";
+    titleImage.onerror = () => { console.error("Error loading title image."); };
+
+    // Home menu left-side image
+    const homeLeftImage = new Image();
+    homeLeftImage.src = "https://res.cloudinary.com/dnqwevxfy/image/upload/v1739202272/vlmzoz0xijbhl0w2t62k.png";
+    homeLeftImage.onerror = () => { console.error("Error loading home left image."); };
+
+    // *** NEW: Home Menu Background Image ***
+    const homeBgImage = new Image();
+    homeBgImage.src = "https://res.cloudinary.com/dnqwevxfy/image/upload/v1739256655/sb1h6lefc7kbzh04ei7q.png";
+    homeBgImage.onerror = () => { console.error("Error loading home background image."); };
+
+    // *** NEW: Bottom Center Image for Home Menu ***
+    const bottomCenterImage = new Image();
+    bottomCenterImage.src = "https://res.cloudinary.com/dnqwevxfy/image/upload/v1739264487/xvzhc48hnweverhlh7k7.png";
+    bottomCenterImage.onerror = () => { console.error("Error loading bottom center image."); };
+
+    // *** NEW: Bottom Left Image for Home Menu ***
+    const bottomLeftImage = new Image();
+    bottomLeftImage.src = "https://res.cloudinary.com/dnqwevxfy/image/upload/v1739271808/vcl8cxl5ifmlvb4yckoz.png";
+    bottomLeftImage.onerror = () => { console.error("Error loading bottom left image."); };
+
+    // Audio objects
+    const crumpleSound = new Audio("https://www.soundjay.com/buttons/sounds/button-3.mp3");
+    const menuMusic = new Audio("https://www.soundjay.com/free-music/sounds/destination-01.mp3");
+    menuMusic.volume = 0.2; menuMusic.loop = true;
+    const gameMusic = new Audio("https://www.soundjay.com/free-music/sounds/midnight-ride-01a.mp3");
+    gameMusic.volume = 0.2; gameMusic.loop = true;
+    const gameOverSound = new Audio("https://www.soundjay.com/misc/sounds/fail-buzzer-03.mp3");
+    let gameOverSoundPlayed = false;
+    const scorePopups = [];
+
+    let gameMusicVolume = 0.2;
+
+    // Transition variables for pause and game over windows
+    let pausePopupProgress = 0;
+    const pausePopupTransitionDuration = 300; // ms
+    let gameOverPopupProgress = 0;
+    const gameOverPopupTransitionDuration = 300; // ms
+
+    // -------------------------------
+    // Game Variables
+    // -------------------------------
+    let score = 0, gameOver = false, lastTime = 0, spawnTimer = 0;
+    const baseSpawnInterval = 2000; // ms
+    let isPaused = false, elapsedTime = 0, isNewBest = false;
+    let gameOverAnimTime = 0, retryButtonScale = 1;
+    let menuImageAnimationStartTime = null;
+    const menuImageAnimationDuration = 1000; // ms
+
+    // IMPORTANT: Initialize bestScore from localStorage (or 0 if not set)
+    let bestScore = localStorage.getItem('bestScore') ? parseInt(localStorage.getItem('bestScore')) : 0;
+
+    // -------------------------------
+    // Player settings (proportional to the canvas size)
+    // -------------------------------
+    const playerProportion = 0.05; // The player's width will be 5% of the canvas width.
+    let playerWidth = canvas.width * playerProportion;
+    // If the player image is already loaded, compute height from its aspect ratio.
+    // Otherwise, use a fallback value (which will be updated on image load).
+    let playerHeight = playerImage.naturalWidth 
+                        ? playerWidth * (playerImage.naturalHeight / playerImage.naturalWidth)
+                        : canvas.height * playerProportion;
+    const player = {
+      x: canvas.width / 2 - playerWidth / 2,
+      y: canvas.height - playerHeight - 10,
+      width: playerWidth,
+      height: playerHeight,
+      speed: 8
+    };
+
+    // Update the player dimensions once the playerImage loads to preserve its natural aspect ratio.
+    playerImage.onload = function() {
+      const aspect = playerImage.naturalHeight / playerImage.naturalWidth;
+      player.width = canvas.width * playerProportion;
+      player.height = player.width * aspect;
+      player.x = canvas.width / 2 - player.width / 2;
+      player.y = canvas.height - player.height - 10;
+    };
+
+    // -------------------------------
+    // Constructors for game objects
+    // -------------------------------
+    function Burger(x, y, radius, speed) {
+      this.x = x;
+      this.y = y;
+      this.radius = radius;
+      this.speed = speed;
+    }
+    function Fry(baseX, y, radius, speed, amplitude, frequency, phase) {
+      this.baseX = baseX;
+      this.y = y;
+      this.radius = radius;
+      this.speed = speed;
+      this.amplitude = amplitude;
+      this.frequency = frequency;
+      this.phase = phase;
+    }
+    function getFryX(fry) {
+      return fry.baseX + fry.amplitude * Math.sin(fry.frequency * fry.y + fry.phase);
+    }
+    
+    // -------------------------------
+    // Easing Functions
+    // -------------------------------
+    function easeOutBounce(x) {
+      const n1 = 5.5, d1 = 2.75;
+      if (x < 1 / d1) { return n1 * x * x; }
+      else if (x < 2 / d1) { return n1 * (x - 1.5 / d1) * (x - 1.5 / d1) + 0.65; }
+      else if (x < 2.5 / d1) { return n1 * (x - 2.25 / d1) * (x - 2.25 / d1) + 0.85; }
+      else { return n1 * (x - 2.625 / d1) * (x - 2.625 / d1) + 0.93; }
+    }
+    function easeOutQuad(t) {
+      return t * (2 - t);
+    }
+
+    // -------------------------------
+    // Score Popup Function
+    // -------------------------------
+    function drawScorePopups() {
+      for (let i = scorePopups.length - 1; i >= 0; i--) {
+        let popup = scorePopups[i];
+        ctx.fillStyle = `rgba(0, 0, 0, ${popup.opacity})`;
+        ctx.font = "24px Comic Sans MS";
+        ctx.textAlign = "center";
+        ctx.fillText("+1", popup.x, popup.y);
+        popup.y -= 1;
+        popup.opacity -= 0.02;
+        if (popup.opacity <= 0) { scorePopups.splice(i, 1); }
+      }
+    }
+    function isColliding(circleX, circleY, radius, player) {
+      const closestX = Math.max(player.x, Math.min(circleX, player.x + player.width));
+      const closestY = Math.max(player.y, Math.min(circleY, player.y + player.height));
+      const dx = circleX - closestX, dy = circleY - closestY;
+      return (dx * dx + dy * dy) < (radius * radius);
+    }
+    function drawRoundedRect(x, y, width, height, radius) {
+      ctx.beginPath();
+      ctx.moveTo(x + radius, y);
+      ctx.lineTo(x + width - radius, y);
+      ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+      ctx.lineTo(x + width, y + height - radius);
+      ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+      ctx.lineTo(x + radius, y + height);
+      ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+      ctx.lineTo(x, y + radius);
+      ctx.quadraticCurveTo(x, y, x + radius, y);
+      ctx.closePath();
+    }
+    function triggerMenuTransition(target) {
+      if (currentMenu === target || menuTransition.active) return;
+      menuTransition.active = true;
+      menuTransition.progress = 0;
+      menuTransition.from = currentMenu;
+      menuTransition.to = target;
+    }
+
+    // -------------------------------
+    // Leaderboard Functions (localStorage based)
+    // -------------------------------
+    function updateLeaderboard() {
+      let leaderboard = [];
+      try { leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || []; }
+      catch (e) { leaderboard = []; }
+      leaderboard = leaderboard.filter(entry => entry.wallet !== (walletAddress || "Anonymous"));
+      leaderboard.push({
+        score: score,
+        wallet: walletAddress || "Anonymous",
+        Nickname: Nickname || (walletAddress || "Anonymous"),
+        date: new Date().toISOString()
+      });
+      leaderboard.sort((a, b) => b.score - a.score);
+      leaderboard = leaderboard.slice(0, 10);
+      localStorage.setItem('leaderboard', JSON.stringify(leaderboard));
+    }
+    function drawLeaderboardOverlay() {
+      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const modalWidth = 400, modalHeight = 500;
+      const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+      ctx.save();
+      const centerX = modalX + modalWidth / 2, centerY = modalY + modalHeight / 2;
+      ctx.translate(centerX, centerY);
+      ctx.scale(easeOutQuad(leaderboardPopupProgress), easeOutQuad(leaderboardPopupProgress));
+      ctx.translate(-centerX, -centerY);
+      ctx.fillStyle = "#fff";
+      drawRoundedRect(modalX, modalY, modalWidth, modalHeight, 20);
+      ctx.fill();
+      ctx.strokeStyle = "#FFA500";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 28px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.fillText("🎖️ Leaderboard 🎖️", modalX + modalWidth / 2, modalY + 40);
+      let leaderboard = [];
+      try { leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || []; }
+      catch (e) { leaderboard = []; }
+      ctx.font = "20px Comic Sans MS";
+      const startY = modalY + 80, lineHeight = 30;
+      if (leaderboard.length === 0) { ctx.fillText("No scores yet.", modalX + modalWidth / 2, startY); }
+      else {
+        for (let i = 0; i < leaderboard.length; i++) {
+          const entry = leaderboard[i];
+          let displayName = (entry.wallet === (walletAddress || "Anonymous"))
+                              ? Nickname
+                              : (entry.Nickname || entry.wallet);
+          if (displayName.length > 10) {
+            displayName = displayName.slice(0, 6) + "..." + displayName.slice(-4);
+          }
+          const text = (i + 1) + ". " + displayName + " - " + entry.score;
+          ctx.fillText(text, modalX + modalWidth / 2, startY + i * lineHeight);
+        }
+      }
+      // Leaderboard "Back" Button with hover and scale effect
+      const btnWidth = 120, btnHeight = 40;
+      const btnX = modalX + (modalWidth - btnWidth) / 2;
+      const btnY = modalY + modalHeight - btnHeight - 20;
+      let scale = leaderboardBackHovered ? 1.1 : 1.0;
+      ctx.save();
+      ctx.translate(btnX + btnWidth/2, btnY + btnHeight/2);
+      ctx.scale(scale, scale);
+      ctx.translate(- (btnX + btnWidth/2), - (btnY + btnHeight/2));
+      ctx.fillStyle = leaderboardBackHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(btnX, btnY, btnWidth, btnHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 24px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Back", btnX + btnWidth/2, btnY + btnHeight/2);
+      ctx.restore();
+      ctx.restore();
+      return { x: btnX, y: btnY, width: btnWidth, height: btnHeight };
+    }
+
+    function drawSettingsOverlay() {
+      const modalHeight = nicknameInputVisible ? 500 : 450;
+      const modalWidth = 400;
+      const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+      ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.save();
+      const centerX = modalX + modalWidth / 2, centerY = modalY + modalHeight / 2;
+      ctx.translate(centerX, centerY);
+      ctx.scale(easeOutQuad(settingsPopupProgress), easeOutQuad(settingsPopupProgress));
+      ctx.translate(-centerX, -centerY);
+      ctx.fillStyle = "#fff";
+      drawRoundedRect(modalX, modalY, modalWidth, modalHeight, 20);
+      ctx.fill();
+      ctx.strokeStyle = "#FFA500";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 28px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.fillText("⚙️ Settings ⚙️", modalX + modalWidth / 2, modalY + 40);
+      const toggleWidth = 200, toggleHeight = 50;
+      const toggleX = modalX + (modalWidth - toggleWidth) / 2, toggleY = modalY + 80;
+      ctx.save();
+      ctx.translate(toggleX + toggleWidth/2, toggleY + toggleHeight/2);
+      ctx.scale(settingsToggleHovered ? 1.1 : 1.0, settingsToggleHovered ? 1.1 : 1.0);
+      ctx.translate(- (toggleX + toggleWidth/2), - (toggleY + toggleHeight/2));
+      ctx.fillStyle = settingsToggleHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(toggleX, toggleY, toggleWidth, toggleHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 24px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Music: " + (musicOn ? "On" : "Off"), toggleX + toggleWidth/2, toggleY + toggleHeight/2);
+      ctx.restore();
+      const sfxToggleWidth = 200, sfxToggleHeight = 50;
+      const sfxToggleX = modalX + (modalWidth - sfxToggleWidth) / 2, sfxToggleY = toggleY + toggleHeight + 10;
+      ctx.save();
+      ctx.translate(sfxToggleX + sfxToggleWidth/2, sfxToggleY + sfxToggleHeight/2);
+      ctx.scale(sfxToggleHovered ? 1.1 : 1.0, sfxToggleHovered ? 1.1 : 1.0);
+      ctx.translate(- (sfxToggleX + sfxToggleWidth/2), - (sfxToggleY + sfxToggleHeight/2));
+      ctx.fillStyle = sfxToggleHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(sfxToggleX, sfxToggleY, sfxToggleWidth, sfxToggleHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 24px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("SFX: " + (soundEffectsOn ? "On" : "Off"), sfxToggleX + sfxToggleWidth/2, sfxToggleY + sfxToggleHeight/2);
+      ctx.restore();
+      const volBtnWidth = 80, volBtnHeight = 40;
+      const volMinusX = modalX + 50, volMinusY = modalY + 200;
+      ctx.save();
+      ctx.translate(volMinusX + volBtnWidth/2, volMinusY + volBtnHeight/2);
+      ctx.scale(settingsVolMinusHovered ? 1.1 : 1.0, settingsVolMinusHovered ? 1.1 : 1.0);
+      ctx.translate(- (volMinusX + volBtnWidth/2), - (volMinusY + volBtnHeight/2));
+      ctx.fillStyle = settingsVolMinusHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(volMinusX, volMinusY, volBtnWidth, volBtnHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 20px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("–", volMinusX + volBtnWidth/2, volMinusY + volBtnHeight/2);
+      ctx.restore();
+      const volPlusX = modalX + modalWidth - 50 - volBtnWidth, volPlusY = volMinusY;
+      ctx.save();
+      ctx.translate(volPlusX + volBtnWidth/2, volPlusY + volBtnHeight/2);
+      ctx.scale(settingsVolPlusHovered ? 1.1 : 1.0, settingsVolPlusHovered ? 1.1 : 1.0);
+      ctx.translate(- (volPlusX + volBtnWidth/2), - (volPlusY + volBtnHeight/2));
+      ctx.fillStyle = settingsVolPlusHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(volPlusX, volPlusY, volBtnWidth, volBtnHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 20px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("+", volPlusX + volBtnWidth/2, volPlusY + volBtnHeight/2);
+      ctx.restore();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 22px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.fillText("Volume: " + Math.round(gameMusicVolume * 100) + "%", modalX + modalWidth/2, volMinusY + volBtnHeight + 20);
+      const nicknameBtnWidth = 200, nicknameBtnHeight = 50;
+      // Draw the nickname button at modalY + 280 (synchronized with hover detection)
+      const nicknameBtnX = modalX + (modalWidth - nicknameBtnWidth) / 2, nicknameBtnY = modalY + 290;
+      ctx.save();
+      ctx.translate(nicknameBtnX + nicknameBtnWidth/2, nicknameBtnY + nicknameBtnHeight/2);
+      ctx.scale(settingsNicknameHovered ? 1.1 : 1.0, settingsNicknameHovered ? 1.1 : 1.0);
+      ctx.translate(- (nicknameBtnX + nicknameBtnWidth/2), - (nicknameBtnY + nicknameBtnHeight/2));
+      ctx.fillStyle = settingsNicknameHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(nicknameBtnX, nicknameBtnY, nicknameBtnWidth, nicknameBtnHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 24px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Nickname", nicknameBtnX + nicknameBtnWidth/2, nicknameBtnY + nicknameBtnHeight/2);
+      ctx.restore();
+      const backWidth = 120, backHeight = 40, backYOffset = 20;
+      const backX = modalX + (modalWidth - 120) / 2, backY = modalY + modalHeight - backHeight - backYOffset;
+      ctx.save();
+      ctx.translate(backX + backWidth/2, backY + backHeight/2);
+      ctx.scale(settingsBackHovered ? 1.1 : 1.0, settingsBackHovered ? 1.1 : 1.0);
+      ctx.translate(- (backX + backWidth/2), - (backY + backHeight/2));
+      ctx.fillStyle = settingsBackHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(backX, backY, backWidth, backHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 24px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Back", backX + backWidth/2, backY + backHeight/2);
+      ctx.restore();
+      ctx.restore();
+      return {
+        musicToggle: { x: toggleX, y: toggleY, width: toggleWidth, height: toggleHeight },
+        sfxToggle: { x: sfxToggleX, y: sfxToggleY, width: sfxToggleWidth, height: sfxToggleHeight },
+        volMinus: { x: volMinusX, y: volMinusY, width: volBtnWidth, height: volBtnHeight },
+        volPlus: { x: volPlusX, y: volPlusY, width: volBtnWidth, height: volBtnHeight },
+        pseudonym: { x: nicknameBtnX, y: nicknameBtnY, width: nicknameBtnWidth, height: nicknameBtnHeight },
+        back: { x: backX, y: backY, width: backWidth, height: backHeight }
+      };
+    }
+
+    // -------------------------------
+    // Draw In-Game Elements (Pause & Game Over)
+    // -------------------------------
+    function drawPlayer() {
+      if (playerImage.complete && playerImage.naturalWidth !== 0) {
+        // Draw the player using its current width and computed height (preserving aspect ratio)
+        ctx.drawImage(playerImage, player.x, player.y, player.width, player.height);
+      } else {
+        ctx.fillStyle = "#654321";
+        ctx.fillRect(player.x, player.y, player.width, player.height);
+      }
+    }
+    function drawBurger(burger) {
+      if (burgerImage.complete && burgerImage.naturalWidth !== 0) {
+        ctx.drawImage(burgerImage, burger.x - burger.radius, burger.y - burger.radius, burger.radius * 2, burger.radius * 2);
+      } else {
+        ctx.beginPath();
+        ctx.arc(burger.x, burger.y, burger.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFA500";
+        ctx.fill();
+        ctx.closePath();
+      }
+    }
+    function drawFry(fry) {
+      const currentX = getFryX(fry);
+      if (friesImage.complete && friesImage.naturalWidth !== 0) {
+        ctx.drawImage(friesImage, currentX - fry.radius, fry.y - fry.radius, fry.radius * 2, fry.radius * 2);
+      } else {
+        ctx.beginPath();
+        ctx.arc(currentX, fry.y, fry.radius, 0, Math.PI * 2);
+        ctx.fillStyle = "#FFD700";
+        ctx.fill();
+        ctx.closePath();
+      }
+    }
+    function drawScore() {
+      ctx.fillStyle = "#000";
+      ctx.font = "24px Comic Sans MS";
+      ctx.textAlign = "left";
+      ctx.fillText("Score: " + score, 10, 30);
+      ctx.fillText("Best: " + bestScore, 10, 60);
+    }
+    function drawTimer() {
+      ctx.fillStyle = "#000";
+      ctx.font = "24px Comic Sans MS";
+      ctx.textAlign = "right";
+      ctx.fillText("Time: " + Math.floor(elapsedTime) + " s", canvas.width - 10, 30);
+    }
+    function triggerMenuTransition(target) {
+      if (currentMenu === target || menuTransition.active) return;
+      menuTransition.active = true;
+      menuTransition.progress = 0;
+      menuTransition.from = currentMenu;
+      menuTransition.to = target;
+    }
+    function drawMenuWithTransition(drawFunc, scale) {
+      ctx.save();
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.scale(scale, scale);
+      ctx.translate(-canvas.width / 2, -canvas.height / 2);
+      drawFunc();
+      ctx.restore();
+    }
+    function getMenuDrawFunction(menu) {
+      if (menu === "main") return drawMainMenu;
+      if (menu === "leaderboard") return drawLeaderboardOverlay;
+      if (menu === "settings") return drawSettingsOverlay;
+      return drawMainMenu;
+    }
+    // -------------------------------
+    // Modified drawMainMenu function:
+    // Draws the home menu background, the left home image (proportionally),
+    // the title image, the UI buttons, the right menu image and now the bottom center image.
+    // -------------------------------
+    function drawMainMenu() {
+      if (homeBgImage.complete && homeBgImage.naturalWidth !== 0) {
+        ctx.drawImage(homeBgImage, 0, 0, canvas.width, canvas.height);
+      } else {
+        ctx.fillStyle = "#d9bf4e";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+      
+      if (homeLeftImage.complete && homeLeftImage.naturalWidth !== 0) {
+        const leftMargin = canvas.width * 0.05;
+        const newWidth = canvas.width * 0.2;
+        const aspectRatio = homeLeftImage.naturalHeight / homeLeftImage.naturalWidth;
+        const newHeight = newWidth * aspectRatio;
+        const x = leftMargin;
+        const y = (canvas.height - newHeight) / 2;
+        ctx.drawImage(homeLeftImage, x, y, newWidth, newHeight);
+      }
+
+      const t = performance.now() / 1000;
+      const bounceScale = 1 + 0.1 * Math.sin(t * 2 * Math.PI);
+      ctx.save();
+      const centerX = canvas.width / 2, centerY = canvas.height / 4;
+      ctx.translate(centerX, centerY);
+      ctx.scale(bounceScale, bounceScale);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (titleImage.complete && titleImage.naturalWidth !== 0) {
+        const targetWidth = 250;
+        const targetHeight = titleImage.naturalHeight * (targetWidth / titleImage.naturalWidth);
+        ctx.drawImage(titleImage, -targetWidth/2, -targetHeight/2, targetWidth, targetHeight);
+      } else {
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 36px Comic Sans MS";
+        ctx.fillText("McAI cooker", 0, 0);
+      }
+      ctx.restore();
+
+      if (walletConnected) {
+        ctx.fillStyle = "white";
+        ctx.font = "18px Comic Sans MS";
+        ctx.textAlign = "right";
+        ctx.textBaseline = "top";
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.8)"; // black shadow with some opacity
+        ctx.shadowBlur = 4; // adjust blur radius as desired
+        ctx.shadowOffsetX = 2; // horizontal offset
+        ctx.shadowOffsetY = 2; // vertical offset
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "black";
+        ctx.strokeText("Address : " + walletAddress, canvas.width - 10, 10);
+        ctx.fillText("Address : " + walletAddress, canvas.width - 10, 10);
+        ctx.restore();
+        const disconnectBtnWidth = 120;
+        const disconnectBtnHeight = 30;
+        const disconnectBtnX = canvas.width - disconnectBtnWidth - 10;
+        const disconnectBtnY = 35;
+        let scale = 1.0;
+        if (disconnectButtonRegion && disconnectButtonRegion.hovered) { scale = 1.1; }
+        ctx.save();
+        ctx.translate(disconnectBtnX + disconnectBtnWidth/2, disconnectBtnY + disconnectBtnHeight/2);
+        ctx.scale(scale, scale);
+        ctx.translate(- (disconnectBtnX + disconnectBtnWidth/2), - (disconnectBtnY + disconnectBtnHeight/2));
+        ctx.fillStyle = "rgba(255,0,0,0.9)";
+        drawRoundedRect(disconnectBtnX, disconnectBtnY, disconnectBtnWidth, disconnectBtnHeight, 5);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.fillStyle = "#FFF";
+        ctx.font = "bold 16px Comic Sans MS";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Disconnect", disconnectBtnX + disconnectBtnWidth / 2, disconnectBtnY + disconnectBtnHeight / 2);
+        ctx.restore();
+        disconnectButtonRegion = { 
+          x: disconnectBtnX, 
+          y: disconnectBtnY, 
+          width: disconnectBtnWidth, 
+          height: disconnectBtnHeight,
+          hovered: disconnectButtonRegion ? disconnectButtonRegion.hovered : false
+        };
+      }
+      if (!walletConnected) {
+        const btnWidth = 280, btnHeight = 60;
+        const btnX = (canvas.width - btnWidth) / 2, btnY = canvas.height / 2;
+        ctx.save();
+        ctx.fillStyle = "rgba(0, 123, 255, 0.9)";
+        drawRoundedRect(btnX, btnY, btnWidth, btnHeight, 10);
+        ctx.fill();
+        ctx.strokeStyle = "#FFF";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = "#FFF";
+        ctx.font = "bold 28px Comic Sans MS";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Connect Wallet", btnX + btnWidth / 2, btnY + btnHeight / 2);
+        ctx.restore();
+      } else {
+        const btnWidth = 300, btnHeight = 60;
+        const playBtnX = (canvas.width - btnWidth) / 2, playBtnY = canvas.height / 2;
+        let playScale = jouerHovered ? 1.1 : 1.0;
+        ctx.save();
+        ctx.translate(playBtnX + btnWidth / 2, playBtnY + btnHeight / 2);
+        ctx.scale(playScale, playScale);
+        ctx.translate(- (playBtnX + btnWidth / 2), - (playBtnY + btnHeight / 2));
+        ctx.fillStyle = jouerHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+        drawRoundedRect(playBtnX, playBtnY, btnWidth, btnHeight, 10);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 32px Comic Sans MS";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("🎮 Play 🎮", playBtnX + btnWidth / 2, playBtnY + btnHeight / 2);
+        ctx.restore();
+
+        const lbBtnX = playBtnX, lbBtnY = playBtnY + btnHeight + 20;
+        let lbScale = lbHovered ? 1.1 : 1.0;
+        ctx.save();
+        ctx.translate(lbBtnX + btnWidth / 2, lbBtnY + btnHeight / 2);
+        ctx.scale(lbScale, lbScale);
+        ctx.translate(- (lbBtnX + btnWidth / 2), - (lbBtnY + btnHeight / 2));
+        ctx.fillStyle = lbHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+        drawRoundedRect(lbBtnX, lbBtnY, btnWidth, btnHeight, 10);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 32px Comic Sans MS";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("🎖️ Leaderboard 🎖️", lbBtnX + btnWidth / 2, lbBtnY + btnHeight / 2);
+        ctx.restore();
+
+        const settingsBtnX = playBtnX, settingsBtnY = lbBtnY + btnHeight + 20;
+        let settingsScaleMain = settingsHovered ? 1.1 : 1.0;
+        ctx.save();
+        ctx.translate(settingsBtnX + btnWidth / 2, settingsBtnY + btnHeight / 2);
+        ctx.scale(settingsScaleMain, settingsScaleMain);
+        ctx.translate(- (settingsBtnX + btnWidth / 2), - (settingsBtnY + btnHeight / 2));
+        ctx.fillStyle = settingsHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+        drawRoundedRect(settingsBtnX, settingsBtnY, btnWidth, btnHeight, 10);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 32px Comic Sans MS";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("⚙️ Settings ⚙️", settingsBtnX + btnWidth / 2, settingsBtnY + btnHeight / 2);
+        ctx.restore();
+      }
+
+      // *** NEW: Draw the bottom left image proportionally to the canvas ***
+      if (bottomLeftImage.complete && bottomLeftImage.naturalWidth !== 0) {
+        const desiredWidthRatio = 0.05; // Adjust this ratio to scale the image as desired
+        let drawWidth = canvas.width * desiredWidthRatio;
+        let scaleFactor = drawWidth / bottomLeftImage.naturalWidth;
+        let drawHeight = bottomLeftImage.naturalHeight * scaleFactor;
+        // Use a small margin (e.g., 10px) from the left and bottom edges:
+        let x = 10;
+        let y = canvas.height - drawHeight - 10;
+        ctx.drawImage(bottomLeftImage, x, y, drawWidth, drawHeight);
+    }
+      
+      // Draw the right menu image proportionally.
+      if (menuRightImage.naturalWidth) { 
+        const maxWidth = canvas.width * 0.45;
+        let scaleFactor = maxWidth / menuRightImage.naturalWidth;
+        let drawWidth = maxWidth;
+        let drawHeight = menuRightImage.naturalHeight * scaleFactor;
+        let finalX = canvas.width - drawWidth;
+        let finalY = canvas.height * 0.75 - drawHeight / 2;
+        if (menuImageAnimationStartTime === null) { menuImageAnimationStartTime = performance.now(); }
+        let animElapsed = performance.now() - menuImageAnimationStartTime;
+        let fraction = animElapsed / menuImageAnimationDuration;
+        if (fraction > 1) fraction = 1;
+        let bounceProgress = easeOutBounce(fraction);
+        ctx.save();
+        ctx.translate(finalX + drawWidth, finalY + drawHeight);
+        ctx.scale(bounceProgress, bounceProgress);
+        ctx.translate(- (finalX + drawWidth), - (finalY + drawHeight));
+        ctx.drawImage(menuRightImage, finalX, finalY, drawWidth, drawHeight);
+        ctx.restore();
+      }
+      
+      // *** NEW: Draw the bottom center image proportionally to the canvas ***
+      if (bottomCenterImage.complete && bottomCenterImage.naturalWidth !== 0) {
+          // Set the drawn width to be a fixed percentage (e.g., 10%) of the canvas width.
+          const desiredWidthRatio = 0.1;
+          let drawWidth = canvas.width * desiredWidthRatio;
+          let scaleFactor = drawWidth / bottomCenterImage.naturalWidth;
+          let drawHeight = bottomCenterImage.naturalHeight * scaleFactor;
+          let x = (canvas.width - drawWidth) / 2;
+          let y = canvas.height - drawHeight;
+          ctx.drawImage(bottomCenterImage, x, y, drawWidth, drawHeight);
+      }
+    }
+
+    // -------------------------------
+    // Modified drawGameOverWindow function:
+    // When a new high score is achieved, add extra vertical space and move the "Continue ?"
+    // button further down.
+    // -------------------------------
+    function drawGameOverWindow() {
+      let baseModalHeight = continueUsed ? 200 : 250;
+      let modalHeight = isNewBest ? baseModalHeight + 50 : baseModalHeight;
+      const modalWidth = 300;
+      const modalX = (canvas.width - modalWidth) / 2;
+      const modalY = (canvas.height - modalHeight) / 2;
+      
+      ctx.save();
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      drawRoundedRect(modalX, modalY, modalWidth, modalHeight, 20);
+      ctx.fill();
+      ctx.strokeStyle = "#FFA500";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 24px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Game Over! 🤖", modalX + modalWidth / 2, modalY + 30);
+      ctx.font = "20px Comic Sans MS";
+      ctx.fillText("Score: " + score, modalX + modalWidth / 2, modalY + 70);
+      ctx.fillText("Best: " + bestScore, modalX + modalWidth / 2, modalY + 100);
+      if (isNewBest) {
+        ctx.fillText("New best score! 🎖️", modalX + modalWidth / 2, modalY + 130);
+      }
+      
+      let continueButtonY = isNewBest ? modalY + 180 : modalY + 120;
+      let buttonY;
+      if (!continueUsed) {
+        const continueBtnWidth = 260, continueBtnHeight = 40;
+        const continueBtnX = modalX + (modalWidth - continueBtnWidth) / 2;
+        buttonY = continueButtonY;
+        continueButtonRegion = { x: continueBtnX, y: buttonY, width: continueBtnWidth, height: continueBtnHeight };
+        
+        ctx.save();
+        ctx.translate(continueBtnX + continueBtnWidth / 2, buttonY + continueBtnHeight / 2);
+        let scale = continueHovered ? 1.1 : 1.0;
+        ctx.scale(scale, scale);
+        ctx.translate(- (continueBtnX + continueBtnWidth / 2), - (buttonY + continueBtnHeight / 2));
+        ctx.fillStyle = continueHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+        drawRoundedRect(continueBtnX, buttonY, continueBtnWidth, continueBtnHeight, 10);
+        ctx.fill();
+        ctx.strokeStyle = "#000";
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.fillStyle = "#000";
+        ctx.font = "bold 20px Comic Sans MS";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("Continue ?", continueBtnX + continueBtnWidth / 2, buttonY + continueBtnHeight / 2);
+        ctx.restore();
+        buttonY += continueBtnHeight + 10;
+      } else { 
+        continueButtonRegion = null;
+        buttonY = continueButtonY;
+      }
+      
+      const buttonWidth = 120, buttonHeight = 40, spacing = 20;
+      const totalWidth = 2 * buttonWidth + spacing;
+      const startX = modalX + (modalWidth - totalWidth) / 2;
+      const bottomY = modalY + modalHeight - buttonHeight - 20;
+      
+      ctx.save();
+      ctx.fillStyle = pauseRetryHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(startX, bottomY, buttonWidth, buttonHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 20px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Retry", startX + buttonWidth/2, bottomY + buttonHeight/2);
+      ctx.restore();
+      const quitX = startX + buttonWidth + spacing;
+      ctx.save();
+      ctx.fillStyle = pauseQuitHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(quitX, bottomY, buttonWidth, buttonHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 20px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Quit", quitX + buttonWidth/2, bottomY + buttonHeight/2);
+      ctx.restore();
+      ctx.restore();
+    }
+
+    // -------------------------------
+    // Draw Pause Window Function (re‑added)
+    // -------------------------------
+    function drawPauseWindow() {
+      const modalWidth = 300, modalHeight = 220;
+      const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+      ctx.save();
+      ctx.translate(modalX + modalWidth/2, modalY + modalHeight/2);
+      ctx.scale(1, 1);
+      ctx.translate(- (modalX + modalWidth/2), - (modalY + modalHeight/2));
+      ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
+      drawRoundedRect(modalX, modalY, modalWidth, modalHeight, 20);
+      ctx.fill();
+      ctx.strokeStyle = "#FFA500";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 18px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Your meal is paused! 🍔🍟", modalX + modalWidth/2, modalY + 40);
+      const hMargin = 20, spacingH = 20, spacingV = 20;
+      const buttonWidth = (modalWidth - 2 * hMargin - spacingH) / 2, buttonHeight = 40;
+      const row1Y = modalY + 80, row2Y = row1Y + buttonHeight + spacingV;
+      const col1X = modalX + hMargin, col2X = modalX + hMargin + buttonWidth + spacingH;
+      let resumeScale = pauseResumeHovered ? 1.1 : 1.0;
+      ctx.save();
+      ctx.translate(col1X + buttonWidth/2, row1Y + buttonHeight/2);
+      ctx.scale(resumeScale, resumeScale);
+      ctx.translate(- (col1X + buttonWidth/2), - (row1Y + buttonHeight/2));
+      ctx.fillStyle = pauseResumeHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(col1X, row1Y, buttonWidth, buttonHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 20px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Resume", col1X + buttonWidth/2, row1Y + buttonHeight/2);
+      ctx.restore();
+      let retryScale = pauseRetryHovered ? 1.1 : 1.0;
+      ctx.save();
+      ctx.translate(col2X + buttonWidth/2, row1Y + buttonHeight/2);
+      ctx.scale(retryScale, retryScale);
+      ctx.translate(- (col2X + buttonWidth/2), - (row1Y + buttonHeight/2));
+      const retryColor = pauseRetryHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      ctx.fillStyle = retryColor;
+      drawRoundedRect(col2X, row1Y, buttonWidth, buttonHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 20px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Retry", col2X + buttonWidth/2, row1Y + buttonHeight/2);
+      ctx.restore();
+      let settingsScalePause = pauseSettingsHovered ? 1.1 : 1.0;
+      ctx.save();
+      ctx.translate(col1X + buttonWidth/2, row2Y + buttonHeight/2);
+      ctx.scale(settingsScalePause, settingsScalePause);
+      ctx.translate(- (col1X + buttonWidth/2), - (row2Y + buttonHeight/2));
+      ctx.fillStyle = pauseSettingsHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      drawRoundedRect(col1X, row2Y, buttonWidth, buttonHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 20px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Settings", col1X + buttonWidth/2, row2Y + buttonHeight/2);
+      ctx.restore();
+      let quitScale = pauseQuitHovered ? 1.1 : 1.0;
+      ctx.save();
+      ctx.translate(col2X + buttonWidth/2, row2Y + buttonHeight/2);
+      ctx.scale(quitScale, quitScale);
+      ctx.translate(- (col2X + buttonWidth/2), - (row2Y + buttonHeight/2));
+      const quitColor = pauseQuitHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      ctx.fillStyle = quitColor;
+      drawRoundedRect(col2X, row2Y, buttonWidth, buttonHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 20px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Quit", col2X + buttonWidth/2, row2Y + buttonHeight/2);
+      ctx.restore();
+      ctx.restore();
+    }
+
+    // -------------------------------
+    // Draw top pause button.
+    // -------------------------------
+    function drawTopPauseButton() {
+      const btnWidth = 200, btnHeight = 50;
+      const btnX = (canvas.width - btnWidth) / 2, btnY = 20;
+      const scale = pauseButtonHovered ? 1.1 : 1.0;
+      ctx.save();
+      ctx.translate(btnX + btnWidth/2, btnY + btnHeight/2);
+      ctx.scale(scale, scale);
+      ctx.translate(- (btnX + btnWidth/2), - (btnY + btnHeight/2));
+      const buttonColor = pauseButtonHovered ? "rgba(0,128,0,0.9)" : "rgba(255,165,0,0.9)";
+      ctx.fillStyle = buttonColor;
+      drawRoundedRect(btnX, btnY, btnWidth, btnHeight, 10);
+      ctx.fill();
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.fillStyle = "#000";
+      ctx.font = "bold 28px Comic Sans MS";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("Pause", btnX + btnWidth/2, btnY + btnHeight/2);
+      ctx.restore();
+    }
+
+    // -------------------------------
+    // Global flag for "continue" (only one extra continue per game)
+    // -------------------------------
+    let continueUsed = false;
+
+    // -------------------------------
+    // Update Game Logic
+    // -------------------------------
+    function updateGame(deltaTime) {
+      elapsedTime += deltaTime / 1000;
+      const currentSpawnInterval = baseSpawnInterval / (1 + elapsedTime / 60);
+      spawnTimer += deltaTime;
+      if (spawnTimer > currentSpawnInterval) {
+        spawnBurgers();
+        if (elapsedTime >= 20) { spawnFries(); }
+        spawnTimer = 0;
+      }
+      for (let i = burgers.length - 1; i >= 0; i--) {
+        let burger = burgers[i];
+        burger.y += burger.speed * deltaTime / 16;
+        if (isColliding(burger.x, burger.y, burger.radius, player)) {
+          burgers.splice(i, 1);
+          score++;
+          scorePopups.push({ x: player.x + player.width / 2, y: player.y - 10, opacity: 1 });
+          if (soundEffectsOn) {
+            let sound = crumpleSound.cloneNode();
+            sound.volume = 1.0;
+            sound.play();
+          }
+        } else if (burger.y - burger.radius > canvas.height) {
+          gameOver = true;
+          gameOverPopupProgress = 1;
+          gameOverAnimTime = 0;
+          if (score > bestScore) {
+            bestScore = score;
+            localStorage.setItem('bestScore', bestScore);
+            isNewBest = true;
+          }
+        }
+      }
+      for (let i = fries.length - 1; i >= 0; i--) {
+        let fry = fries[i];
+        fry.y += fry.speed * deltaTime / 16;
+        const currentX = getFryX(fry);
+        if (isColliding(currentX, fry.y, fry.radius, player)) {
+          fries.splice(i, 1);
+          score++;
+          scorePopups.push({ x: player.x + player.width / 2, y: player.y - 10, opacity: 1 });
+          if (soundEffectsOn) {
+            let sound = crumpleSound.cloneNode();
+            sound.volume = 1.0;
+            sound.play();
+          }
+        } else if (fry.y - fry.radius > canvas.height) {
+          gameOver = true;
+          gameOverPopupProgress = 1;
+          gameOverAnimTime = 0;
+          if (score > bestScore) {
+            bestScore = score;
+            localStorage.setItem('bestScore', bestScore);
+            isNewBest = true;
+          }
+        }
+      }
+    }
+    function spawnBurgers() {
+      const spawnCount = Math.floor(elapsedTime / 30) + 1;
+      for (let i = 0; i < spawnCount; i++) {
+        const radius = 20;
+        const x = Math.random() * (canvas.width - radius * 2) + radius;
+        const y = -radius;
+        const baseSpeed = 1 + Math.random();
+        let speedMultiplier = (elapsedTime < 10) ? 0.8 + 0.4 * (elapsedTime / 10) : 1 + elapsedTime / 60;
+        const speed = baseSpeed * speedMultiplier;
+        burgers.push(new Burger(x, y, radius, speed));
+      }
+    }
+    function spawnFries() {
+      const spawnCount = Math.floor(elapsedTime / 60) + 1;
+      for (let i = 0; i < spawnCount; i++) {
+        const radius = 20;
+        const baseX = Math.random() * (canvas.width - radius * 2) + radius;
+        const y = -radius;
+        const baseSpeed = 1 + Math.random();
+        let speedMultiplier = (elapsedTime < 10) ? 0.8 + 0.4 * (elapsedTime / 10) : 1 + elapsedTime / 60;
+        const speed = baseSpeed * speedMultiplier;
+        const amplitude = 15, frequency = 0.05, phase = Math.random() * 2 * Math.PI;
+        fries.push(new Fry(baseX, y, radius, speed, amplitude, frequency, phase));
+      }
+    }
+
+    // -------------------------------
+    // Main Game Loop
+    // -------------------------------
+    const burgers = [], fries = [];
+    function gameLoop(timestamp) {
+      if (!lastTime) lastTime = timestamp;
+      const deltaTime = timestamp - lastTime;
+      lastTime = timestamp;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      if (showMenu) {
+        if (!gameMusic.paused) { gameMusic.pause(); gameMusic.currentTime = 0; }
+      } else {
+        if (!menuMusic.paused) { menuMusic.pause(); menuMusic.currentTime = 0; }
+      }
+      
+      if (gameOver) {
+        if (!menuMusic.paused) { menuMusic.pause(); gameMusic.currentTime = 0; }
+        if (!gameMusic.paused) { gameMusic.pause(); gameMusic.currentTime = 0; }
+        if (!gameOverSoundPlayed) { if (soundEffectsOn) gameOverSound.play(); gameOverSoundPlayed = true; }
+        if (!leaderboardUpdated) { updateLeaderboard(); leaderboardUpdated = true; }
+        gameOverAnimTime += deltaTime / 1000;
+        drawGameOverWindow();
+      }
+      else if (currentMenu === "settings" && !showMenu && pauseSettingsActive) {
+        drawPlayer();
+        burgers.forEach(drawBurger);
+        fries.forEach(drawFry);
+        drawScore();
+        drawTimer();
+        drawScorePopups();
+        if (!settingsClosing) {
+          settingsPopupProgress += deltaTime / modalTransitionDuration;
+          if (settingsPopupProgress > 1) settingsPopupProgress = 1;
+        } else {
+          settingsPopupProgress -= deltaTime / modalTransitionDuration;
+          if (settingsPopupProgress <= 0) { settingsPopupProgress = 0; settingsClosing = false; currentMenu = "main"; pauseSettingsActive = false; }
+        }
+        drawSettingsOverlay();
+      }
+      else if (showMenu) {
+        if (currentMenu === "main") {
+          if (menuTransition.active) {
+            menuTransition.progress += deltaTime;
+            let fraction = menuTransition.progress / menuTransition.duration;
+            let scale;
+            if (fraction < 0.5) {
+              scale = 1 - (fraction * 2);
+              drawMenuWithTransition(drawMainMenu, scale);
+            } else {
+              if (currentMenu !== menuTransition.to) { currentMenu = menuTransition.to; }
+              scale = (fraction - 0.5) * 2;
+              drawMenuWithTransition(getMenuDrawFunction(menuTransition.to), scale);
+            }
+            if (fraction >= 1) { menuTransition.active = false; menuTransition.progress = 0; }
+          } else { drawMainMenu(); }
+        } else if (currentMenu === "leaderboard") {
+          if (!leaderboardClosing) {
+            if (leaderboardPopupProgress < 1) { leaderboardPopupProgress += deltaTime / modalTransitionDuration; if (leaderboardPopupProgress > 1) leaderboardPopupProgress = 1; }
+          } else {
+            leaderboardPopupProgress -= deltaTime / modalTransitionDuration;
+            if (leaderboardPopupProgress <= 0) { leaderboardPopupProgress = 0; leaderboardClosing = false; currentMenu = "main"; }
+          }
+          drawMainMenu();
+          drawLeaderboardOverlay();
+        } else if (currentMenu === "settings") {
+          if (!settingsClosing) { settingsPopupProgress += deltaTime / modalTransitionDuration; if (settingsPopupProgress > 1) settingsPopupProgress = 1; }
+          else { settingsPopupProgress -= deltaTime / modalTransitionDuration; if (settingsPopupProgress <= 0) { settingsPopupProgress = 0; settingsClosing = false; currentMenu = "main"; } }
+          drawMainMenu();
+          drawSettingsOverlay();
+        }
+      }
+      else {
+        if (!isPaused) {
+          updateGame(deltaTime);
+          drawPlayer();
+          burgers.forEach(drawBurger);
+          fries.forEach(drawFry);
+          drawScore();
+          drawTimer();
+          drawScorePopups();
+          drawTopPauseButton();
+        } else {
+          drawPlayer();
+          burgers.forEach(drawBurger);
+          fries.forEach(drawFry);
+          drawScore();
+          drawTimer();
+          drawScorePopups();
+        }
+        if (isPaused) { drawPauseWindow(); }
+      }
+      
+      // Update Nickname input and OK button positions
+      const nicknameInput = document.getElementById("nicknameInput");
+      const nicknameOkButton = document.getElementById("nicknameOkButton");
+      if ((showMenu || pauseSettingsActive) && currentMenu === "settings" && nicknameInputVisible) {
+        const modalWidth = 400;
+        const modalHeight = nicknameInputVisible ? 500 : 450;
+        const modalX = (canvas.width - modalWidth) / 2;
+        const modalY = (canvas.height - modalHeight) / 2;
+        const groupWidth = 270;
+        nicknameInput.style.display = "block";
+        nicknameInput.style.left = (modalX + (modalWidth - groupWidth) / 2) + "px";
+        nicknameInput.style.top = (modalY + 350) + "px";
+        nicknameInput.style.width = "150px";
+        nicknameInput.style.height = "35px";
+        nicknameOkButton.style.display = "block";
+        nicknameOkButton.style.left = (modalX + (modalWidth - groupWidth) / 2 + 150 + 20) + "px";
+        nicknameOkButton.style.top = (modalY + 350) + "px";
+        nicknameOkButton.style.width = "100px";
+        nicknameOkButton.style.height = "40px";
+        nicknameOkButton.style.lineHeight = "38px";
+      } else {
+        document.getElementById("nicknameInput").style.display = "none";
+        document.getElementById("nicknameOkButton").style.display = "none";
+      }
+      
+      if ((showMenu) && musicOn && menuMusic.paused) {
+        menuMusic.play().catch((err) => console.error("Error playing background music:", err));
+      }
+      if (!showMenu && !gameOver && !isPaused && musicOn && gameMusic.paused) {
+        gameMusic.volume = gameMusicVolume;
+        gameMusic.play().catch((err) => console.error("Error playing game music:", err));
+      }
+      
+      requestAnimationFrame(gameLoop);
+    }
+    function connectWallet() {
+      if (window.solana && window.solana.isPhantom) {
+        window.solana.connect().then(response => {
+          walletConnected = true;
+          walletAddress = response.publicKey.toString();
+          console.log("Connected with wallet:", walletAddress);
+          if (!localStorage.getItem("Nickname")) {
+            Nickname = walletAddress;
+            localStorage.setItem("Nickname", Nickname);
+          } else { Nickname = localStorage.getItem("Nickname"); }
+        }).catch(err => {
+          console.error("Wallet connection error:", err);
+        });
+      } else { alert("Phantom wallet not found. Please install the Phantom wallet extension."); }
+    }
+    async function disconnectWallet() {
+      if (window.solana && window.solana.isPhantom) {
+        try { await window.solana.disconnect(); }
+        catch(e) { console.error("Error disconnecting wallet:", e); }
+      }
+      walletConnected = false; walletAddress = "";
+      showMenu = true; currentMenu = "main";
+    }
+    function handleSettingsClick(e) {
+      let x, y;
+      if (e.touches && e.touches.length > 0) { x = e.touches[0].clientX; y = e.touches[0].clientY; }
+      else { x = e.clientX; y = e.clientY; }
+      const modalWidth = 400, modalHeight = 450;
+      const modalY = (canvas.height - modalHeight) / 2, modalX = (canvas.width - modalWidth) / 2;
+      const musicToggleRegion = { x: modalX + (modalWidth - 200) / 2, y: modalY + 80, width: 200, height: 50 };
+      const sfxToggleRegion = { x: modalX + (modalWidth - 200) / 2, y: modalY + 80 + 50 + 10, width: 200, height: 50 };
+      const volMinusRegion = { x: modalX + 50, y: modalY + 200, width: 80, height: 40 };
+      const volPlusRegion = { x: modalX + modalWidth - 50 - 80, y: modalY + 200, width: 80, height: 40 };
+      const pseudonymRegion = { x: modalX + (modalWidth - 200) / 2, y: modalY + 270, width: 200, height: 50 };
+      const backRegion = { x: modalX + (modalWidth - 120) / 2, y: modalY + modalHeight - 40 - 20, width: 120, height: 40 };
+      if (x >= musicToggleRegion.x && x <= musicToggleRegion.x + musicToggleRegion.width &&
+          y >= musicToggleRegion.y && y <= musicToggleRegion.y + musicToggleRegion.height) {
+        musicOn = !musicOn;
+        if (!musicOn) {
+          if (!menuMusic.paused) { menuMusic.pause(); menuMusic.currentTime = 0; }
+          if (!gameMusic.paused) { gameMusic.pause(); gameMusic.currentTime = 0; }
+        }
+        e.preventDefault(); return;
+      }
+      if (x >= sfxToggleRegion.x && x <= sfxToggleRegion.x + sfxToggleRegion.width &&
+          y >= sfxToggleRegion.y && y <= sfxToggleRegion.y + sfxToggleRegion.height) {
+        soundEffectsOn = !soundEffectsOn;
+        e.preventDefault(); return;
+      }
+      if (x >= volMinusRegion.x && x <= volMinusRegion.x + volMinusRegion.width &&
+          y >= volMinusRegion.y && y <= volMinusRegion.y + volMinusRegion.height) {
+        gameMusicVolume = Math.max(0, gameMusicVolume - 0.05);
+        gameMusic.volume = gameMusicVolume; menuMusic.volume = gameMusicVolume;
+        e.preventDefault(); return;
+      }
+      if (x >= volPlusRegion.x && x <= volPlusRegion.x + volPlusRegion.width &&
+          y >= volPlusRegion.y && y <= volPlusRegion.y + volPlusRegion.height) {
+        gameMusicVolume = Math.min(1, gameMusicVolume + 0.05);
+        gameMusic.volume = gameMusicVolume; menuMusic.volume = gameMusicVolume;
+        e.preventDefault(); return;
+      }
+      if (x >= pseudonymRegion.x && x <= pseudonymRegion.x + pseudonymRegion.width &&
+          y >= pseudonymRegion.y && y <= pseudonymRegion.y + pseudonymRegion.height) {
+        nicknameInputVisible = !nicknameInputVisible;
+        e.preventDefault(); return;
+      }
+      if (x >= backRegion.x && x <= backRegion.x + backRegion.width &&
+          y >= backRegion.y && y <= backRegion.y + backRegion.height) {
+        settingsClosing = true;
+        e.preventDefault(); return;
+      }
+    }
+
+    function handleCanvasClick(e) {
+      if (showMenu && menuTransition.active) { e.preventDefault(); return; }
+      if (isPaused && pauseSettingsActive) { handleSettingsClick(e); return; }
+      let x, y;
+      if (e.touches && e.touches.length > 0) { x = e.touches[0].clientX; y = e.touches[0].clientY; }
+      else { x = e.clientX; y = e.clientY; }
+      
+      if (showMenu) {
+        if (currentMenu === "main") {
+          if (walletConnected) {
+            if (disconnectButtonRegion) {
+              if (x >= disconnectButtonRegion.x && x <= disconnectButtonRegion.x + disconnectButtonRegion.width &&
+                  y >= disconnectButtonRegion.y && y <= disconnectButtonRegion.y + disconnectButtonRegion.height) {
+                disconnectWallet(); e.preventDefault(); return;
+              }
+            }
+          }
+          if (!walletConnected) {
+            const btnWidth = 280, btnHeight = 60;
+            const btnX = (canvas.width - btnWidth) / 2, btnY = canvas.height / 2;
+            if (x >= btnX && x <= btnX + btnWidth &&
+                y >= btnY && y <= btnY + btnHeight) {
+              connectWallet(); e.preventDefault(); return;
+            }
+          } else {
+            const btnWidth = 300, btnHeight = 60;
+            const playBtnX = (canvas.width - btnWidth) / 2, playBtnY = canvas.height / 2;
+            const lbBtnX = playBtnX, lbBtnY = playBtnY + btnHeight + 20;
+            const settingsBtnX = playBtnX, settingsBtnY = lbBtnY + btnHeight + 20;
+            if (x >= playBtnX && x <= playBtnX + btnWidth &&
+                y >= playBtnY && y <= playBtnY + btnHeight) {
+              showMenu = false;
+              currentMenu = null;
+              lastTime = performance.now();
+              // Restart the game music from the beginning:
+              gameMusic.pause();
+              gameMusic.currentTime = 0;
+              gameMusic.volume = gameMusicVolume;
+              if (musicOn) { gameMusic.play().catch(() => console.log("Error starting game music.")); }
+              e.preventDefault();
+              return;
+            } else if (x >= lbBtnX && x <= lbBtnX + btnWidth &&
+                       y >= lbBtnY && y <= lbBtnY + btnHeight) {
+              currentMenu = "leaderboard"; leaderboardPopupProgress = 0; leaderboardClosing = false;
+              e.preventDefault(); return;
+            } else if (x >= settingsBtnX && x <= settingsBtnX + btnWidth &&
+                       y >= settingsBtnY && y <= settingsBtnY + btnHeight) {
+              currentMenu = "settings"; settingsPopupProgress = 0; settingsClosing = false;
+              e.preventDefault(); return;
+            }
+          }
+          return;
+        } else if (currentMenu === "leaderboard") {
+          const modalWidth = 400, modalHeight = 500;
+          const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+          const btnWidth = 120, btnHeight = 40;
+          const btnX = modalX + (modalWidth - btnWidth) / 2, btnY = modalY + modalHeight - btnHeight - 20;
+          if (x >= btnX && x <= btnX + btnWidth &&
+              y >= btnY && y <= btnY + btnHeight) {
+            leaderboardClosing = true; e.preventDefault(); return;
+          }
+          return;
+        } else if (currentMenu === "settings") {
+          handleSettingsClick(e); return;
+        }
+      }
+      
+      if (gameOver) {
+        const modalWidth = 300, modalHeight = continueUsed ? 200 : 250;
+        const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+        if (!continueUsed && continueButtonRegion) {
+          if (x >= continueButtonRegion.x && x <= continueButtonRegion.x + continueButtonRegion.width &&
+              y >= continueButtonRegion.y && y <= continueButtonRegion.y + continueButtonRegion.height) {
+            continueGameWithBurn(); e.preventDefault(); return;
+          }
+        }
+        const buttonWidth = 120, buttonHeight = 40, spacing = 20;
+        const totalWidth = 2 * buttonWidth + spacing;
+        const startX = modalX + (modalWidth - totalWidth) / 2;
+        const buttonY = modalY + (continueUsed ? 150 : 210);
+        if (x >= startX && x <= startX + buttonWidth &&
+            y >= buttonY && y <= buttonY + buttonHeight) {
+          // Restart the game music from the beginning on Retry:
+          restartGame();
+          gameMusic.pause();
+          gameMusic.currentTime = 0;
+          if (musicOn) { gameMusic.play().catch(() => console.log("Error starting game music.")); }
+          e.preventDefault(); return;
+        }
+        const quitX = startX + buttonWidth + spacing;
+        if (x >= quitX && x <= quitX + buttonWidth &&
+            y >= buttonY && y <= buttonY + buttonHeight) {
+          quitGame(); e.preventDefault(); return;
+        }
+      }
+      
+      if (!gameOver && !isPaused) {
+        const btnWidth = 200, btnHeight = 50;
+        const btnX = (canvas.width - btnWidth) / 2, btnY = 20;
+        if (x >= btnX && x <= btnX + btnWidth &&
+            y >= btnY && y <= btnY + btnHeight) {
+          isPaused = true;
+          pausePopupProgress = 1;
+          if (!gameMusic.paused) { gameMusic.pause(); }
+          e.preventDefault(); return;
+        }
+      }
+      
+      if (isPaused) {
+        const modalWidth = 300, modalHeight = 220;
+        const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+        const hMargin = 20, spacingH = 20, spacingV = 20;
+        const buttonWidth = (modalWidth - 2 * hMargin - spacingH) / 2, buttonHeight = 40;
+        const row1Y = modalY + 80, row2Y = row1Y + buttonHeight + spacingV;
+        const col1X = modalX + hMargin, col2X = modalX + hMargin + buttonWidth + spacingH;
+        let effectiveX = x, effectiveY = y;
+        if (pausePopupProgress > 0 && pausePopupProgress !== 1) {
+          const centerX = modalX + modalWidth / 2, centerY = modalY + modalHeight / 2;
+          effectiveX = centerX + (x - centerX) / pausePopupProgress;
+          effectiveY = centerY + (y - centerY) / pausePopupProgress;
+        }
+        if (effectiveY >= row1Y && effectiveY < row1Y + buttonHeight) {
+          if (effectiveX >= col1X && effectiveX < col1X + buttonWidth) {
+            isPaused = false;
+            pausePopupProgress = 0;
+            if (musicOn && gameMusic.paused) { gameMusic.play().catch(() => console.log("Error restarting game music.")); }
+            e.preventDefault(); return;
+          } else if (effectiveX >= col2X && effectiveX < col2X + buttonWidth) {
+            restartGame();
+            gameMusic.pause();
+            gameMusic.currentTime = 0;
+            if (musicOn) { gameMusic.play().catch(() => console.log("Error starting game music.")); }
+            e.preventDefault(); return;
+          }
+        } else if (effectiveY >= row2Y && effectiveY < row2Y + buttonHeight) {
+          if (effectiveX >= col1X && effectiveX < col1X + buttonWidth) {
+            pauseSettingsActive = true; currentMenu = "settings"; settingsPopupProgress = 0; settingsClosing = false;
+            e.preventDefault(); return;
+          } else if (effectiveX >= col2X && effectiveX < col2X + buttonWidth) {
+            quitGame(); e.preventDefault(); return;
+          }
+        }
+      }
+      
+      if ((showMenu) && musicOn && menuMusic.paused) {
+        menuMusic.play().catch((err) => console.error("Error playing background music:", err));
+      }
+      if (!showMenu && !gameOver && !isPaused && musicOn && gameMusic.paused) {
+        gameMusic.volume = gameMusicVolume;
+        gameMusic.play().catch((err) => console.error("Error playing game music:", err));
+      }
+    }
+
+    // -------------------------------
+    // Solana Token Burn Integration for "Continue?" Option
+    // -------------------------------
+    async function continueGameWithBurn() {
+      if (continueUsed) {
+        console.log("Continue option already used in this game.");
+        return;
+      }
+      if (!window.solana || !window.solana.isPhantom) {
+        alert("Phantom wallet not found. Please install the Phantom wallet extension.");
+        return;
+      }
+
+      try {
+        const provider = window.solana;
+        if (!provider.isConnected) {
+          await provider.connect();
+        }
+
+        const connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+
+        // ✅ Ensure SPL Token library is loaded
+        const splToken = window.splToken;
+        if (!splToken) {
+          throw new Error("SPL Token library is not loaded.");
+        }
+
+        // 🔹 Define the token mint address (replace with your actual token)
+        const tokenMint = new solanaWeb3.PublicKey('ZLRFU1HT74TybM8sEgX7z9YspTi9Yp32wqN1LFFKmyc');
+        const tokenDecimals = 9;
+
+        // 🔹 Burn address (incinerator address)
+        const burnAddress = new solanaWeb3.PublicKey('1nc1nerator11111111111111111111111111111111');
+
+        // ✅ Get associated token account for the user
+        const fromTokenAccount = await splToken.getAssociatedTokenAddress(
+            tokenMint,
+            provider.publicKey,
+            false, // Not a PDA
+            splToken.TOKEN_PROGRAM_ID
+        );
+
+        // 🔹 Amount to burn (adjust for decimals)
+        const amount = 100 * Math.pow(10, tokenDecimals);
+
+        // ✅ Create the transaction instruction
+        const transferIx = splToken.createTransferInstruction(
+            fromTokenAccount,
+            burnAddress,
+            provider.publicKey,
+            amount,
+            [],
+            splToken.TOKEN_PROGRAM_ID
+        );
+
+        // ✅ Create transaction
+        let transaction = new solanaWeb3.Transaction().add(transferIx);
+        transaction.feePayer = provider.publicKey;
+
+        // 🔹 Fetch recent blockhash
+        const { blockhash } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+
+        // 🔹 Sign and send transaction
+        const signedTransaction = await provider.signTransaction(transaction);
+        const txid = await connection.sendRawTransaction(signedTransaction.serialize());
+
+        // ✅ Confirm transaction
+        await connection.confirmTransaction(txid);
+
+        alert("Tokens burned successfully! Continuing the game.");
+        continueUsed = true;
+        gameOver = false;
+      } catch (err) {
+        console.error("Error during token burn transaction:", err);
+        alert("Transaction failed: " + err.message);
+      }
+    }
+
+    window.addEventListener('resize', function() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+      // Update player size proportionally while preserving the image's aspect ratio.
+      player.width = canvas.width * playerProportion;
+      if (playerImage.naturalWidth) {
+        const aspect = playerImage.naturalHeight / playerImage.naturalWidth;
+        player.height = player.width * aspect;
+      } else {
+        player.height = canvas.height * playerProportion;
+      }
+      player.x = canvas.width / 2 - player.width / 2;
+      player.y = canvas.height - player.height - 10;
+    });
+    
+    document.getElementById("nicknameOkButton").addEventListener("click", function() {
+      const nicknameField = document.getElementById("nicknameInput");
+      const newNickname = nicknameField.value.trim();
+      if (newNickname.length < 3) { alert("Nickname must be at least 3 characters long!"); return; }
+      Nickname = newNickname;
+      localStorage.setItem("Nickname", Nickname);
+      let leaderboard = [];
+      try { leaderboard = JSON.parse(localStorage.getItem('leaderboard')) || []; }
+      catch (e) { leaderboard = []; }
+      let updated = false;
+      for (let i = 0; i < leaderboard.length; i++) {
+        if (leaderboard[i].wallet === (walletAddress || "Anonymous")) {
+          leaderboard[i].Nickname = Nickname; updated = true;
+        }
+      }
+      if (updated) { localStorage.setItem('leaderboard', JSON.stringify(leaderboard)); }
+      nicknameInputVisible = false;
+    });
+    document.getElementById("nicknameOkButton").addEventListener("mouseenter", function() { playHoverSound(); });
+
+    function startMusicOnUserGesture() {
+      if (musicOn && menuMusic.paused) {
+        menuMusic.play().catch((err) => console.error("Error playing background music:", err));
+      }
+      canvas.removeEventListener('mousedown', startMusicOnUserGesture);
+      canvas.removeEventListener('touchstart', startMusicOnUserGesture);
+    }
+    canvas.addEventListener('mousedown', startMusicOnUserGesture);
+    canvas.addEventListener('touchstart', startMusicOnUserGesture);
+
+    canvas.addEventListener('touchstart', handleCanvasClick);
+    canvas.addEventListener('mousedown', handleCanvasClick);
+
+    let prevLeaderboardBackHovered = false; // Track previous hover state of leaderboard back button
+
+    canvas.addEventListener('mousemove', function(e) {
+      const rect = canvas.getBoundingClientRect();
+      const mouseX = e.clientX - rect.left, mouseY = e.clientY - rect.top;
+      
+      if (showMenu && currentMenu === "leaderboard") {
+        const leaderboardBackButton = drawLeaderboardOverlay();
+        leaderboardBackHovered = (mouseX >= leaderboardBackButton.x &&
+                                  mouseX <= leaderboardBackButton.x + leaderboardBackButton.width &&
+                                  mouseY >= leaderboardBackButton.y &&
+                                  mouseY <= leaderboardBackButton.y + leaderboardBackButton.height);
+        if (leaderboardBackHovered && !prevLeaderboardBackHovered) {
+            playHoverSound();
+        }
+        prevLeaderboardBackHovered = leaderboardBackHovered;
+      } else {
+          leaderboardBackHovered = false;
+          prevLeaderboardBackHovered = false;
+      }
+
+      // Update hover state for the "Continue ?" button when game is over.
+      if (gameOver && !continueUsed && continueButtonRegion) {
+        if (mouseX >= continueButtonRegion.x && mouseX <= continueButtonRegion.x + continueButtonRegion.width &&
+            mouseY >= continueButtonRegion.y && mouseY <= continueButtonRegion.y + continueButtonRegion.height) {
+          continueHovered = true;
+          if (!prevContinueHovered) { playHoverSound(); }
+        } else { continueHovered = false; }
+        prevContinueHovered = continueHovered;
+      }
+      
+      if (gameOver) {
+        const modalWidth = 300, modalHeight = continueUsed ? 200 : 250;
+        const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+        const buttonWidth = 120, buttonHeight = 40, spacing = 20;
+        const totalWidth = 2 * buttonWidth + spacing;
+        const startX = modalX + (modalWidth - totalWidth) / 2;
+        const buttonY = modalY + (continueUsed ? 150 : 210);
+        pauseRetryHovered = (mouseX >= startX && mouseX <= startX + buttonWidth &&
+                              mouseY >= buttonY && mouseY <= buttonY + buttonHeight);
+        pauseQuitHovered = (mouseX >= startX + buttonWidth + spacing &&
+                             mouseX <= startX + buttonWidth + spacing + buttonWidth &&
+                             mouseY >= buttonY && mouseY <= buttonY + buttonHeight);
+      }
+      if (!showMenu && !gameOver) {
+        if (!isPaused) {
+          const pauseBtnWidth = 200, pauseBtnHeight = 50;
+          const pauseBtnX = (canvas.width - pauseBtnWidth) / 2, pauseBtnY = 20;
+          pauseButtonHovered = (mouseX >= pauseBtnX && mouseX <= pauseBtnX + pauseBtnWidth &&
+                                mouseY >= pauseBtnY && mouseY <= pauseBtnY + pauseBtnHeight);
+        }
+      }
+      if (showMenu && !menuTransition.active) {
+        if (currentMenu === "main") {
+          if (!walletConnected) {
+            const btnWidth = 280, btnHeight = 60;
+            const btnX = (canvas.width - btnWidth) / 2, btnY = canvas.height / 2;
+            jouerHovered = (mouseX >= btnX && mouseX <= btnX + btnWidth &&
+                             mouseY >= btnY && mouseY <= btnY + btnHeight);
+          } else {
+            const btnWidth = 300, btnHeight = 60;
+            const playBtnX = (canvas.width - btnWidth) / 2, playBtnY = canvas.height / 2;
+            const lbBtnX = playBtnX, lbBtnY = playBtnY + btnHeight + 20;
+            const settingsBtnX = playBtnX, settingsBtnY = lbBtnY + btnHeight + 20;
+            jouerHovered = (mouseX >= playBtnX && mouseX <= playBtnX + btnWidth &&
+                             mouseY >= playBtnY && mouseY <= playBtnY + btnHeight);
+            lbHovered = (mouseX >= lbBtnX && mouseX <= lbBtnX + btnWidth &&
+                         mouseY >= lbBtnY && mouseY <= lbBtnY + btnHeight);
+            settingsHovered = (mouseX >= settingsBtnX && mouseX <= settingsBtnX + btnWidth &&
+                               mouseY >= settingsBtnY && mouseY <= settingsBtnY + btnHeight);
+            if (disconnectButtonRegion) {
+              disconnectButtonRegion.hovered = (mouseX >= disconnectButtonRegion.x &&
+                                                mouseX <= disconnectButtonRegion.x + disconnectButtonRegion.width &&
+                                                mouseY >= disconnectButtonRegion.y &&
+                                                mouseY <= disconnectButtonRegion.y + disconnectButtonRegion.height);
+            }
+          }
+        } else if (currentMenu === "settings") {
+          const modalWidth = 400, modalHeight = nicknameInputVisible ? 500 : 450;
+          const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+          settingsToggleHovered = (mouseX >= modalX + (modalWidth - 200) / 2 &&
+                                     mouseX <= modalX + (modalWidth - 200) / 2 + 200 &&
+                                     mouseY >= modalY + 80 &&
+                                     mouseY <= modalY + 80 + 50);
+          sfxToggleHovered = (mouseX >= modalX + (modalWidth - 200) / 2 &&
+                              mouseX <= modalX + (modalWidth - 200) / 2 + 200 &&
+                              mouseY >= modalY + 80 + 50 + 10 &&
+                              mouseY <= modalY + 80 + 50 + 10 + 50);
+          settingsVolMinusHovered = (mouseX >= modalX + 50 &&
+                                     mouseX <= modalX + 50 + 80 &&
+                                     mouseY >= modalY + 200 &&
+                                     mouseY <= modalY + 200 + 40);
+          settingsVolPlusHovered = (mouseX >= modalX + modalWidth - 50 - 80 &&
+                                    mouseX <= modalX + modalWidth - 50 &&
+                                    mouseY >= modalY + 200 &&
+                                    mouseY <= modalY + 200 + 40);
+          // UPDATED: Use modalY + 280 (to match the drawing code)
+          settingsNicknameHovered = (mouseX >= modalX + (modalWidth - 200) / 2 &&
+                                     mouseX <= modalX + (modalWidth - 200) / 2 + 200 &&
+                                     mouseY >= modalY + 290 &&
+                                     mouseY <= modalY + 290 + 50);
+          const backWidth = 120, backHeight = 40, backYOffset = 20;
+          const backX = modalX + (modalWidth - 120) / 2, backY = modalY + modalHeight - backHeight - backYOffset;
+          settingsBackHovered = (mouseX >= backX &&
+                                 mouseX <= backX + backWidth &&
+                                 mouseY >= backY &&
+                                 mouseY <= backY + backHeight);
+        }
+      } else if (!showMenu && !gameOver) {
+        if (isPaused) {
+          if (pauseSettingsActive) {
+            const modalWidth = 400, modalHeight = nicknameInputVisible ? 500 : 450;
+            const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+            settingsToggleHovered = (mouseX >= modalX + (modalWidth - 200) / 2 &&
+                                     mouseX <= modalX + (modalWidth - 200) / 2 + 200 &&
+                                     mouseY >= modalY + 80 &&
+                                     mouseY <= modalY + 80 + 50);
+            sfxToggleHovered = (mouseX >= modalX + (modalWidth - 200) / 2 &&
+                                mouseX <= modalX + (modalWidth - 200) / 2 + 200 &&
+                                mouseY >= modalY + 80 + 50 + 10 &&
+                                mouseY <= modalY + 80 + 50 + 10 + 50);
+            settingsVolMinusHovered = (mouseX >= modalX + 50 &&
+                                       mouseX <= modalX + 50 + 80 &&
+                                       mouseY >= modalY + 200 &&
+                                       mouseY <= modalY + 200 + 40);
+            settingsVolPlusHovered = (mouseX >= modalX + modalWidth - 50 - 80 &&
+                                      mouseX <= modalX + modalWidth - 50 &&
+                                      mouseY >= modalY + 200 &&
+                                      mouseY <= modalY + 200 + 40);
+            settingsNicknameHovered = (mouseX >= modalX + (modalWidth - 200) / 2 &&
+                                       mouseX <= modalX + (modalWidth - 200) / 2 + 200 &&
+                                       mouseY >= modalY + 280 &&
+                                       mouseY <= modalY + 280 + 50);
+            const backWidth = 120, backHeight = 40, backYOffset = 20;
+            const backX = modalX + (modalWidth - backWidth) / 2, backY = modalY + modalHeight - backHeight - backYOffset;
+            settingsBackHovered = (mouseX >= backX &&
+                                   mouseX <= backX + backWidth &&
+                                   mouseY >= backY &&
+                                   mouseY <= backY + backHeight);
+          } else {
+            const modalWidth = 300, modalHeight = 220;
+            const modalX = (canvas.width - modalWidth) / 2, modalY = (canvas.height - modalHeight) / 2;
+            const hMargin = 20, spacingH = 20, spacingV = 20;
+            const buttonWidth = (modalWidth - 2 * hMargin - spacingH) / 2, buttonHeight = 40;
+            const row1Y = modalY + 80, row2Y = row1Y + buttonHeight + spacingV;
+            const col1X = modalX + hMargin, col2X = modalX + hMargin + buttonWidth + spacingH;
+            pauseResumeHovered = (mouseX >= col1X &&
+                                  mouseX <= col1X + buttonWidth &&
+                                  mouseY >= row1Y &&
+                                  mouseY <= row1Y + buttonHeight);
+            pauseRetryHovered = (mouseX >= col2X &&
+                                 mouseX <= col2X + buttonWidth &&
+                                 mouseY >= row1Y &&
+                                 mouseY <= row1Y + buttonHeight);
+            pauseSettingsHovered = (mouseX >= col1X &&
+                                    mouseX <= col1X + buttonWidth &&
+                                    mouseY >= row2Y &&
+                                    mouseY <= row2Y + buttonHeight);
+            pauseQuitHovered = (mouseX >= col2X &&
+                                mouseX <= col2X + buttonWidth &&
+                                mouseY >= row2Y &&
+                                mouseY <= row2Y + buttonHeight);
+          }
+        } else {
+          player.x = mouseX - player.width / 2;
+          if (player.x < 0) player.x = 0;
+          if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+        }
+      }
+      if (jouerHovered && !prevJouerHovered) { playHoverSound(); }
+      if (lbHovered && !prevLbHovered) { playHoverSound(); }
+      if (settingsHovered && !prevSettingsHovered) { playHoverSound(); }
+      if (disconnectButtonRegion && disconnectButtonRegion.hovered && !prevDisconnectHovered) { playHoverSound(); }
+      if (settingsToggleHovered && !prevSettingsToggleHovered) { playHoverSound(); }
+      if (sfxToggleHovered && !prevSfxToggleHovered) { playHoverSound(); }
+      if (settingsVolMinusHovered && !prevSettingsVolMinusHovered) { playHoverSound(); }
+      if (settingsVolPlusHovered && !prevSettingsVolPlusHovered) { playHoverSound(); }
+      if (settingsNicknameHovered && !prevSettingsNicknameHovered) { playHoverSound(); }
+      if (settingsBackHovered && !prevSettingsBackHovered) { playHoverSound(); }
+      if (pauseResumeHovered && !prevPauseResumeHovered) { playHoverSound(); }
+      if (pauseRetryHovered && !prevPauseRetryHovered) { playHoverSound(); }
+      if (pauseSettingsHovered && !prevPauseSettingsHovered) { playHoverSound(); }
+      if (pauseQuitHovered && !prevPauseQuitHovered) { playHoverSound(); }
+      if (pauseButtonHovered && !prevPauseButtonHovered) { playHoverSound(); }
+      prevJouerHovered = jouerHovered;
+      prevLbHovered = lbHovered;
+      prevSettingsHovered = settingsHovered;
+      prevDisconnectHovered = disconnectButtonRegion ? disconnectButtonRegion.hovered : false;
+      prevSettingsToggleHovered = settingsToggleHovered;
+      prevSfxToggleHovered = sfxToggleHovered;
+      prevSettingsVolMinusHovered = settingsVolMinusHovered;
+      prevSettingsVolPlusHovered = settingsVolPlusHovered;
+      prevSettingsNicknameHovered = settingsNicknameHovered;
+      prevSettingsBackHovered = settingsBackHovered;
+      prevPauseResumeHovered = pauseResumeHovered;
+      prevPauseRetryHovered = pauseRetryHovered;
+      prevPauseSettingsHovered = pauseSettingsHovered;
+      prevPauseQuitHovered = pauseQuitHovered;
+      prevPauseButtonHovered = pauseButtonHovered;
+      
+      if (!showMenu && !gameOver && !isPaused) {
+        player.x = mouseX - player.width / 2;
+        if (player.x < 0) player.x = 0;
+        if (player.x + player.width > canvas.width) player.x = canvas.width - player.width;
+      }
+    });
+
+    window.addEventListener('keydown', function(e) {
+      if (e.code === "Space") {
+        isPaused = !isPaused;
+        if (isPaused) {
+          pausePopupProgress = 1;
+          if (!gameMusic.paused) { gameMusic.pause(); }
+        } else {
+          pausePopupProgress = 0;
+          if (!gameOver && gameMusic.paused && musicOn) { gameMusic.play().catch(() => console.log("Error restarting game music.")); }
+        }
+      }
+    });
+
+    function restartGame() {
+      score = 0; gameOver = false; burgers.length = 0; fries.length = 0;
+      lastTime = 0; spawnTimer = 0; elapsedTime = 0; isPaused = false;
+      isNewBest = false; gameOverAnimTime = 0; retryButtonScale = 1;
+      leaderboardUpdated = false; gameOverSoundPlayed = false;
+      menuImageAnimationStartTime = null; pausePopupProgress = 0; gameOverPopupProgress = 0;
+      continueUsed = false;
+    }
+    function quitGame() {
+      score = 0; gameOver = false; burgers.length = 0; fries.length = 0;
+      lastTime = 0; spawnTimer = 0; elapsedTime = 0; isPaused = false;
+      isNewBest = false; gameOverAnimTime = 0; retryButtonScale = 1;
+      showMenu = true; currentMenu = "main"; leaderboardUpdated = false;
+      gameOverSoundPlayed = false; menuImageAnimationStartTime = null;
+      pausePopupProgress = 0; gameOverPopupProgress = 0;
+      if (!menuMusic.paused) { menuMusic.pause(); menuMusic.currentTime = 0; }
+      if (!gameMusic.paused) { gameMusic.pause(); gameMusic.currentTime = 0; }
+    }
+
+    function startMusicOnUserGesture() {
+      if (musicOn && menuMusic.paused) {
+        menuMusic.play().catch((err) => console.error("Error playing background music:", err));
+      }
+      canvas.removeEventListener('mousedown', startMusicOnUserGesture);
+      canvas.removeEventListener('touchstart', startMusicOnUserGesture);
+    }
+    canvas.addEventListener('mousedown', startMusicOnUserGesture);
+    canvas.addEventListener('touchstart', startMusicOnUserGesture);
+
+    requestAnimationFrame(gameLoop);
+  </script>
+</body>
+</html>
